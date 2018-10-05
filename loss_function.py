@@ -37,10 +37,12 @@ def compute_loss(yolo_outputs, y_true, anchors, num_classes, ignore_thresh=ignor
 
         # Darknet raw box to calculate loss.
         raw_true_xy = y_true[l][..., :2] * grid_shapes[l][::-1] - grid
-        raw_true_wh = K.log(y_true[l][..., 2:4] / anchors[anchor_mask[l]] * input_shape[::-1])
-        raw_true_wh = K.switch(object_mask, raw_true_wh, K.zeros_like(raw_true_wh))  # avoid log(0)=-inf
+        raw_true_wh = K.log((y_true[l][..., 2:4] + 1e-9) / anchors[anchor_mask[l]] * input_shape[::-1])
+        # print(K.ndim(object_mask), K.ndim(raw_true_wh), K.ndim(K.zeros_like(raw_true_wh)))
+        # raw_true_wh = K.switch(object_mask, raw_true_wh, K.zeros_like(raw_true_wh))  # avoid log(0)=-inf
+        extended_mask = tf.tile(object_mask, [1,1,1,1,2])
+        raw_true_wh = tf.where(extended_mask > 0, raw_true_wh, K.ones_like(raw_true_wh))  # avoid log(0)=-inf
         box_loss_scale = 2 - y_true[l][..., 2:3] * y_true[l][..., 3:4]
-
         # Find ignore mask, iterate over each of batch.
         ignore_mask = tf.TensorArray(K.dtype(y_true[0]), size=1, dynamic_size=True)
         object_mask_bool = K.cast(object_mask, 'bool')
@@ -65,13 +67,15 @@ def compute_loss(yolo_outputs, y_true, anchors, num_classes, ignore_thresh=ignor
                                                                     from_logits=True) * ignore_mask
         class_loss = object_mask * K.binary_crossentropy(true_class_probs, raw_pred[..., 5:], from_logits=True)
 
-        xy_loss = K.sum(xy_loss) / mf
-        wh_loss = K.sum(wh_loss) / mf
-        confidence_loss = K.sum(confidence_loss) / mf
-        class_loss = K.sum(class_loss) / mf
-        loss += xy_loss + wh_loss + confidence_loss + class_loss
+        loss_weight = 2**l
+        xy_loss = K.sum(xy_loss) / mf / loss_weight
+        wh_loss = K.sum(wh_loss) / mf / loss_weight
+        confidence_loss = K.sum(confidence_loss) / mf / loss_weight
+        class_loss = K.sum(class_loss) / mf / loss_weight
+        loss += (xy_loss + wh_loss + confidence_loss + class_loss)
+
         if print_loss:
-            loss = tf.Print(loss, [loss, xy_loss, wh_loss, confidence_loss, class_loss, K.sum(ignore_mask)],
+            loss = tf.Print(loss, [loss, xy_loss, wh_loss, confidence_loss, class_loss, K.sum(ignore_mask), K.shape(raw_true_wh)],
                             message='loss: ')
     return loss
 

@@ -50,13 +50,13 @@ def yolo_head(feature_maps, anchors, num_classes, input_shape, calc_loss=False):
         # sigmoid for the the 2-class logistic regression: output fall into [0,1] ---> sum(all classes) >1
         # for the relative width and weight, use the exponential function"""
         box_xy = tf.sigmoid(feature_maps_reshape[..., :2], name='x_y')  # [None, 13, 13, 3, 2]
-        tf.summary.histogram(box_xy.op.name + '/activations', box_xy)
+        # tf.summary.histogram(box_xy.op.name + '/activations', box_xy)
         box_wh = tf.exp(feature_maps_reshape[..., 2:4], name='w_h')  # [None, 13, 13, 3, 2]
-        tf.summary.histogram(box_wh.op.name + '/activations', box_wh)
+        # tf.summary.histogram(box_wh.op.name + '/activations', box_wh)
         box_confidence = tf.sigmoid(feature_maps_reshape[..., 4:5], name='confidence')  # [None, 13, 13, 3, 1]
-        tf.summary.histogram(box_confidence.op.name + '/activations', box_confidence)
+        # tf.summary.histogram(box_confidence.op.name + '/activations', box_confidence)
         box_class_probs = tf.sigmoid(feature_maps_reshape[..., 5:], name='class_probs')  # [None, 13, 13, 3, 80]
-        tf.summary.histogram(box_class_probs.op.name + '/activations', box_class_probs)
+        # tf.summary.histogram(box_class_probs.op.name + '/activations', box_class_probs)
         # Adjust predictions to each spatial grid point and anchor size.
         # Note: YOLO iterates over height index before width index.
         box_xy = (box_xy + grid) / tf.cast(grid_shape[::-1],  # (x,y + grid)/13. ---> in between (0., 1.)

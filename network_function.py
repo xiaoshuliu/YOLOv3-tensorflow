@@ -198,9 +198,7 @@ class YOLOv3(object):
         name_vari = 'moving_variance' + str(idx)
         name_beta = 'beta' + str(idx)
         name_gam = 'gamma' + str(idx)
-        # tous = True
-        tous = False
-        # tous = self.ST
+        # trainable = False
         with tf.variable_scope(name_conv):
             if trainable == True:
                 # we will initialize weights by a Gaussian distribution with mean 0 and variance 1/sqrt(n)
@@ -217,14 +215,16 @@ class YOLOv3(object):
                         np.random.normal(size=[1, 1, 512, 3 * (self.NUM_CLASSES + 1 + 4)], loc=0.0, scale=0.01),
                         trainable=True,
                         dtype=np.float32, name="weights")
-                else:
+                elif idx == 75:
                     weights = tf.Variable(
                         np.random.normal(size=[1, 1, 256, 3 * (self.NUM_CLASSES + 1 + 4)], loc=0.0, scale=0.01),
                         trainable=True,
                         dtype=np.float32, name="weights")
+                else:
+                    weights = tf.Variable(W(idx), trainable=trainable, dtype=tf.float32, name="weights")
             else:
-                weights = tf.Variable(W(idx), trainable=tous, dtype=tf.float32, name="weights")
-            tf.summary.histogram(name_w, weights)  # add summary
+                weights = tf.Variable(W(idx), trainable=trainable, dtype=tf.float32, name="weights")
+            # tf.summary.histogram(name_w, weights)  # add summary
 
             if stride == 2:
                 paddings = tf.constant([[0, 0], [1, 0], [1, 0], [0, 0]])
@@ -251,14 +251,14 @@ class YOLOv3(object):
                     #                     lambda: (ema.average(batch_mean), ema.average(batch_var)))
 
                     moving_mean, moving_variance, beta, gamma = B(idx)
-                    moving_mean = tf.Variable(moving_mean, trainable=tous, dtype=tf.float32, name="moving_mean")
-                    tf.summary.histogram(name_mean, moving_mean)  # add summary
-                    moving_variance = tf.Variable(moving_variance, trainable=tous, dtype=tf.float32, name="moving_variance")
-                    tf.summary.histogram(name_vari, moving_variance)  # add summary
-                    beta = tf.Variable(beta, trainable=tous, dtype=tf.float32, name="beta")
-                    tf.summary.histogram(name_beta, beta)  # add summary
-                    gamma = tf.Variable(gamma, trainable=tous, dtype=tf.float32, name="gamma")
-                    tf.summary.histogram(name_gam, gamma)  # add summary
+                    moving_mean = tf.Variable(moving_mean, trainable=trainable, dtype=tf.float32, name="moving_mean")
+                    # tf.summary.histogram(name_mean, moving_mean)  # add summary
+                    moving_variance = tf.Variable(moving_variance, trainable=trainable, dtype=tf.float32, name="moving_variance")
+                    # tf.summary.histogram(name_vari, moving_variance)  # add summary
+                    beta = tf.Variable(beta, trainable=trainable, dtype=tf.float32, name="beta")
+                    # tf.summary.histogram(name_beta, beta)  # add summary
+                    gamma = tf.Variable(gamma, trainable=trainable, dtype=tf.float32, name="gamma")
+                    # tf.summary.histogram(name_gam, gamma)  # add summary
                     conv = tf.nn.batch_normalization(conv, moving_mean, moving_variance, beta, gamma,
                                                      variance_epsilon, name='BatchNorm')
                     # conv = tf.nn.batch_normalization(conv, mean, var, beta, gamma,
@@ -278,7 +278,7 @@ class YOLOv3(object):
                         dtype=np.float32, name="biases")
                 else:
                     biases = tf.Variable(B(idx), trainable=False, dtype=tf.float32, name="biases")
-                tf.summary.histogram(name_b, biases)  # add summary
+                # tf.summary.histogram(name_b, biases)  # add summary
                 conv = tf.add(conv, biases)
                 return conv
 

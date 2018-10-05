@@ -6,7 +6,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 def W(number_conv):
     # Charger weights from the pre-trained in COCO
     import h5py
-    with h5py.File(path + '/yolo3/model/yolov3.h5', 'r') as f:
+    with h5py.File(path + '/model/yolov3.h5', 'r') as f:
         name = 'conv2d_' + str(number_conv)
         w = f['model_weights'][name][name]['kernel:0']
         weights = tf.cast(w, tf.float32)
@@ -16,7 +16,7 @@ def W(number_conv):
 def B(number_conv):
     # Charger biases, bat_norm from the pre-trained in COCO
     import h5py
-    with h5py.File(path + '/yolo3/model/yolov3.h5', 'r') as f:
+    with h5py.File(path + '/model/yolov3.h5', 'r') as f:
         if (number_conv == 59) or (number_conv == 67) or (number_conv == 75):
             name = 'conv2d_' + str(number_conv)
             b = f['model_weights'][name][name]['bias:0']
@@ -24,9 +24,7 @@ def B(number_conv):
             return biases
         else:
             if 68 <= number_conv <= 74:
-                name = 'batch_normalization_' + str(number_conv-2)
-                if number_conv==74:
-                    print("Finir de charger les poids!")
+                name = 'batch_normalization_' + str(number_conv - 2)
             elif 66 >= number_conv >= 60:
                 name = 'batch_normalization_' + str(number_conv - 1)
             elif 0 < number_conv <= 58:

@@ -1,7 +1,7 @@
 # CONFIGURE
 # change the path to your project
-path = '/home/minh/PycharmProjects'
-# image pré-processing
+path = '/home/liu/Desktop/YOLOv3-tensorflow'
+# image pre-processing
 Input_shape = 416  # width=height # 608 or 416 or 320
 channels = 3  # RBG
 angle = 0

@@ -13,6 +13,8 @@ import colorsys
 import random
 import sys
 import os
+import glob
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # from tensorflow.python.client import device_lib
 # print(device_lib.list_local_devices())
@@ -20,7 +22,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 class YOLO(object):
     def __init__(self):
 
-        self.anchors_path = path + '/yolo3/model/yolo_anchors.txt'
+        self.anchors_path = path + '/model/yolo_anchors.txt'
         self.COCO = False
         self.trainable = True
 
@@ -28,14 +30,14 @@ class YOLO(object):
         if args1=='COCO':
             print("-----------COCO-----------")
             self.COCO = True
-            self.classes_path = path + '/yolo3/model/coco_classes.txt'
+            self.classes_path = path + '/model/coco_classes.txt'
             self.trainable = False
         elif args1=='VOC':
             print("-----------VOC------------")
-            self.classes_path = path + '/yolo3/model/voc_classes.txt'
-        elif args1=='boat':
-            print("-----------boat-----------")
-            self.classes_path = path + '/yolo3/model/boat_classes.txt'
+            self.classes_path = path + '/model/voc_classes.txt'
+        elif args1=='bdd':
+            print("-----------bdd-----------")
+            self.classes_path = path + '/model/bdd_classes.txt'
 
         # args = self.argument()
         # if args.COCO:
@@ -46,9 +48,9 @@ class YOLO(object):
         # elif args.VOC:
         #     print("-----------VOC------------")
         #     self.classes_path = self.PATH + '/model/voc_classes.txt'
-        # elif args.boat:
-        #     print("-----------boat-----------")
-        #     self.classes_path = self.PATH + '/model/boat_classes.txt'
+        # elif args.bdd:
+        #     print("-----------bdd-----------")
+        #     self.classes_path = self.PATH + '/model/bdd_classes.txt'
 
         self.class_names = read_classes(self.classes_path)
         self.anchors = read_anchors(self.anchors_path)
@@ -61,10 +63,10 @@ class YOLO(object):
 
     @staticmethod
     def argument():
-        parser = argparse.ArgumentParser(description='COCO or VOC or boat')
+        parser = argparse.ArgumentParser(description='COCO or VOC or bdd')
         parser.add_argument('--COCO', action='store_true', help='COCO flag')
         parser.add_argument('--VOC', action='store_true', help='VOC flag')
-        parser.add_argument('--boat', action='store_true', help='boat flag')
+        parser.add_argument('--bdd', action='store_true', help='bdd flag')
         args = parser.parse_args()
         return args
     def load(self):
@@ -106,7 +108,7 @@ class YOLO(object):
         epoch = input('Entrer a check point at epoch:')
         # For the case of COCO
         epoch = epoch if self.COCO == False else 2000
-        checkpoint = path + "/yolo3/save_model/SAVER_MODEL_boat10/model.ckpt-" + str(epoch)
+        checkpoint = path + "/save_model/bdd10/epoch_" + ".ckpt-" + str(epoch)
         try:
             aaa = checkpoint + '.meta'
             my_abs_path = Path(aaa).resolve()
@@ -152,8 +154,8 @@ class YOLO(object):
         print('Found {} boxes for {}'.format(len(out_boxes), 'img'))
 
         # Visualisation#################################################################################################
-        font = ImageFont.truetype(font=path + '/yolo3/model/font/FiraMono-Medium.otf', size=np.floor(3e-2 * image.size[1] + 0.5).astype(np.int32))
-        thickness = (image.size[0] + image.size[1]) // 500  # do day cua BB
+        font = ImageFont.truetype(font=path + '/model/font/FiraMono-Medium.otf', size=np.floor(3e-2 * image.size[1] + 0.5).astype(np.int32))
+        thickness = (image.size[0] + image.size[1]) // 2000  # do day cua BB
 
         for i, c in reversed(list(enumerate(out_classes))):
             predicted_class = self.class_names[c]
@@ -277,18 +279,18 @@ def detect_video(yolo, video_path=None, output_video=None):
         yolo.sess.close()
 
 def detect_img(yolo, output=''):
-    while True:
-        img = input('Input image filename:')
+    input_imgs = glob.glob(input_folder + '/*.jpg')
+    for img in input_imgs:
+        # img = input('Input image filename:')
         try:
-            img = path + '/yolo3' + str(img)
+            # img = path + '' + str(img)
             image = Image.open(img)
         except:
             print('Open Error! Try again!')
             continue
         else:
             r_image = yolo.detect_image(image)
-            r_image.save(output)
-            r_image.show()
+            r_image.save(img.replace(input_folder, output))
 
     yolo.sess.close()
 
@@ -296,8 +298,9 @@ def detect_img(yolo, output=''):
 if __name__ == '__main__':
     choose = sys.argv[1]
     if choose=='image':
-        output = sys.argv[3]
-        detect_img(YOLO(), output)
+        output_folder = sys.argv[4]
+        input_folder = sys.argv[3]
+        detect_img(YOLO(), output_folder)
     elif choose=='video':
         video_path = sys.argv[3]
         output = sys.argv[4]
