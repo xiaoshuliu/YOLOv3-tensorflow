@@ -2,7 +2,7 @@ from config import Input_shape, channels, path
 from network_function import YOLOv3
 
 from loss_function import compute_loss
-from utils.yolo_utils import get_training_data, read_anchors, read_classes, load_training_data
+from yolo_utils import get_training_data, read_anchors, read_classes, load_training_data
 
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True

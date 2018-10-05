@@ -301,7 +301,6 @@ class YOLOv3(object):
         :param input2: [5, 500, 416, 32]
         :param name: name in graph
         :return: concatenate{input1, input2} [5, 500, 416, 3+32]
-                 (nối lại)
         """
         # [route]-1, 36
         # [route]-1, 61

@@ -1,4 +1,3 @@
-# Fonction de coût
 import keras.backend as K
 import tensorflow as tf
 from config import ignore_thresh
