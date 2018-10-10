@@ -1,8 +1,9 @@
 # CONFIGURE
 # change the path to your project
 path = '/home/liu/Desktop/YOLOv3-tensorflow'
+data_path = '/media/liu/Liu Drive/BDD'
 # image pre-processing
-Input_shape = 416  # width=height # 608 or 416 or 320
+Input_shape = 608  # width=height # 608 or 416 or 320
 channels = 3  # RBG
 angle = 0
 saturation = 1.5

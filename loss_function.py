@@ -71,7 +71,7 @@ def compute_loss(yolo_outputs, y_true, anchors, num_classes, ignore_thresh=ignor
         wh_loss = K.sum(wh_loss) / mf / loss_weight
         confidence_loss = K.sum(confidence_loss) / mf / loss_weight
         class_loss = K.sum(class_loss) / mf / loss_weight
-        loss += (xy_loss + wh_loss + confidence_loss + class_loss)
+        loss += (xy_loss + 2*wh_loss + confidence_loss + class_loss)
 
         if print_loss:
             loss = tf.Print(loss, [loss, xy_loss, wh_loss, confidence_loss, class_loss, K.sum(ignore_mask), K.shape(raw_true_wh)],

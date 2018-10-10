@@ -1,8 +1,8 @@
-from config import Input_shape, channels, path
+from config import Input_shape, channels, path, data_path
 from network_function import YOLOv3
 
 from loss_function import compute_loss
-from yolo_utils import get_training_data, read_anchors, read_classes, load_training_data
+from yolo_utils import get_training_data, read_anchors, read_classes, load_training_data, online_process
 
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -27,6 +27,7 @@ def argument():
     return args
 # Get Data #############################################################################################################
 PATH = path
+DATA_PATH = data_path
 classes_paths = PATH + '/model/bdd_classes.txt'
 classes_data = read_classes(classes_paths)
 anchors_paths = PATH + '/model/yolo_anchors.txt'
@@ -34,16 +35,23 @@ anchors = read_anchors(anchors_paths)
 print ("Number of classes: ", len(classes_data))
 
 annotation_path_train = PATH + '/model/bdd_train.txt'
-annotation_path_valid = PATH + '/model/bdd_train.txt'
+annotation_path_valid = PATH + '/model/bdd_val.txt'
 annotation_path_test = PATH + '/model/bdd_test.txt'
 
 # data_path_train = PATH + '/model/bdd_train.npz'
 # data_path_valid = PATH + '/model/bdd_valid.npz'
 # data_path_test = PATH + '/model/bdd_test.npz'
 
-data_path_train = PATH + '/data/bdd_train/'
-data_path_valid = PATH + '/data/bdd_valid/'
-data_path_test = PATH + '/data/bdd_test/'
+data_path_train = DATA_PATH + '/bdd_train/'
+data_path_valid = DATA_PATH + '/bdd_valid/'
+data_path_test = DATA_PATH + '/bdd_test/'
+
+label_train = []
+label_valid = []
+with open(annotation_path_train) as f:
+        label_train = f.readlines()
+with open(annotation_path_valid) as f:
+        label_valid = f.readlines()
 
 # VOC = False
 # args = argument()
@@ -61,17 +69,15 @@ data_path_test = PATH + '/data/bdd_test/'
 
 
 
-# input_shape = (Input_shape, Input_shape)  # multiple of 32
+input_shape = (Input_shape, Input_shape)  # multiple of 32
 # x_train, box_data_train, image_shape_train, y_train = get_training_data(annotation_path_train, data_path_train,
 #                                                                         input_shape, anchors, "train", num_classes=len(classes_data), max_boxes=40, load_previous=True)
 # x_valid, box_data_valid, image_shape_valid, y_valid = get_training_data(annotation_path_valid, data_path_valid,
 #                                                                         input_shape, anchors, "val", num_classes=len(classes_data), max_boxes=40, load_previous=True)
 # # x_test, box_data_test, image_shape_test, y_test = get_training_data(annotation_path_test, data_path_test,
 # #                                                                     input_shape, anchors, num_classes=len(classes_data), max_boxes=20, load_previous=True)
-# number_image_train = np.shape(x_train)[0]
-# print("number_image_train", number_image_train)
-# number_image_valid = np.shape(x_valid)[0]
-# print("number_image_valid", number_image_valid)
+print("number_image_train", len(label_train))
+print("number_image_valid", len(label_valid))
 
 ########################################################################################################################
 """
@@ -152,12 +158,13 @@ with graph.as_default():
         # checkpoint = "/home/minh/PycharmProjects/yolo3/save_model/SAVER_MODEL_boatM/model.ckpt-" + "1"
         # saver.restore(sess, checkpoint)
         epochs = 50  #
-        batch_size = 12  # consider
+        batch_size = 8  # consider
         best_loss_valid = 10e6
-        train_list = glob.glob(data_path_train+"*.npz")
-        valid_list = glob.glob(data_path_valid+"*.npz")
-        number_image_train = len(train_list)
-        number_image_valid = len(valid_list)
+        # train_list = glob.glob(data_path_train+"*.npz")
+        # valid_list = glob.glob(data_path_valid+"*.npz")
+        number_image_train = len(label_train)
+        number_image_valid = 100
+        num_classes = len(classes_data)
         print(number_image_train, "images for training.")
         for epoch in range(epochs):
             start_time = time.time()
@@ -176,8 +183,9 @@ with graph.as_default():
                     if start + bb == number_image_train:
                         break
                     ind = random_indices[start + bb]
-                    data_name = train_list[ind]
-                    x_, _, _, y_ = load_training_data(data_name)
+                    label_line = label_train[ind]
+                    x_, y_ = online_process(label_line, input_shape, anchors, num_classes)
+                    # x_, _, _, y_ = load_training_data(data_name)
                     x_list.append(x_)
                     y1_list.append(y_[0][0])
                     y2_list.append(y_[1][0])
@@ -226,8 +234,11 @@ with graph.as_default():
                     if start + bb == number_image_valid:
                         break
                     ind = start + bb
-                    data_name = train_list[ind]
-                    x_, _, _, y_ = load_training_data(data_name)
+                    # data_name = train_list[ind]
+
+                    label_line = label_valid[ind]
+                    x_, y_ = online_process(label_line, input_shape, anchors, num_classes)
+                    # x_, _, _, y_ = load_training_data(data_name)
                     x_list.append(x_)
                     y1_list.append(y_[0][0])
                     y2_list.append(y_[1][0])

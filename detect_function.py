@@ -155,7 +155,7 @@ def yolo_boxes_and_scores(feats, anchors, num_classes, input_shape, image_shape)
     return boxes, box_scores
 
 
-def predict(yolo_outputs, anchors, num_classes, image_shape, max_boxes=20, score_threshold=threshold, iou_threshold=ignore_thresh):
+def predict(yolo_outputs, anchors, num_classes, image_shape, max_boxes=100, score_threshold=threshold, iou_threshold=ignore_thresh):
     """
     Evaluate YOLO model on given input and return filtered boxes
     :param yolo_outputs:

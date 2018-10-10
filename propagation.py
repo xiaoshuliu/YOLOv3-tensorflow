@@ -3,7 +3,7 @@ from PIL import Image, ImageFont, ImageDraw
 from config import Input_shape, channels, threshold, ignore_thresh, path
 from network_function import YOLOv3
 from detect_function import predict
-from utils.yolo_utils import read_anchors, read_classes, letterbox_image  # , resize_image
+from yolo_utils import read_anchors, read_classes, letterbox_image  # , resize_image
 from timeit import default_timer as timer  # to calculate FPS
 from pathlib import Path
 import numpy as np
@@ -14,6 +14,7 @@ import random
 import sys
 import os
 import glob
+import time
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # from tensorflow.python.client import device_lib
@@ -108,7 +109,7 @@ class YOLO(object):
         epoch = input('Entrer a check point at epoch:')
         # For the case of COCO
         epoch = epoch if self.COCO == False else 2000
-        checkpoint = path + "/save_model/bdd10/epoch_" + ".ckpt-" + str(epoch)
+        checkpoint = path + "/save_model/bdd10/epoch_new" + ".ckpt-" + str(epoch)
         try:
             aaa = checkpoint + '.meta'
             my_abs_path = Path(aaa).resolve()
@@ -145,6 +146,7 @@ class YOLO(object):
         image_data /= 255.
         inputs = np.expand_dims(image_data, 0)  # Add batch dimension. #
 
+        t1 = time.time()
         out_boxes, out_scores, out_classes = self.sess.run([self.boxes, self.scores, self.classes],
                                                            feed_dict={self.x: inputs,
                                                                       self.image_shape: image_shape,
@@ -152,9 +154,11 @@ class YOLO(object):
                                                                       })
 
         print('Found {} boxes for {}'.format(len(out_boxes), 'img'))
+        t2 = time.time() - t1
+        print('Inference time:', t2)
 
         # Visualisation#################################################################################################
-        font = ImageFont.truetype(font=path + '/model/font/FiraMono-Medium.otf', size=np.floor(3e-2 * image.size[1] + 0.5).astype(np.int32))
+        font = ImageFont.truetype(font=path + '/model/font/FiraMono-Medium.otf', size=np.floor(1e-2 * image.size[1] + 0.5).astype(np.int32))
         thickness = (image.size[0] + image.size[1]) // 2000  # do day cua BB
 
         for i, c in reversed(list(enumerate(out_classes))):
@@ -184,7 +188,7 @@ class YOLO(object):
             draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=self.colors[c])
             draw.text(text_origin, label, fill=(0, 0, 0), font=font)
             del draw
-        return image
+        return image, t2
 
 def detect_video(yolo, video_path=None, output_video=None):
     import urllib.request as urllib
@@ -207,7 +211,7 @@ def detect_video(yolo, video_path=None, output_video=None):
             # print(np.shape(img))  # get w, h from here
 
             image = Image.fromarray(img)
-            image = yolo.detect_image(image)
+            image, _ = yolo.detect_image(image)
             result = np.asarray(image)
 
             curr_time = timer()
@@ -248,7 +252,7 @@ def detect_video(yolo, video_path=None, output_video=None):
             if ret==True:
                 image = Image.fromarray(frame)
 
-                image = yolo.detect_image(image)
+                image, _ = yolo.detect_image(image)
                 result = np.asarray(image)
 
                 curr_time = timer()
@@ -261,7 +265,7 @@ def detect_video(yolo, video_path=None, output_video=None):
                     fps = "FPS: " + str(curr_fps)
                     curr_fps = 0
                 cv2.putText(result, text=fps, org=(3, 15), fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                            fontScale=0.50, color=(255, 0, 0), thickness=2)
+                            fontScale=0.25, color=(255, 0, 0), thickness=1)
                 cv2.namedWindow("Result", cv2.WINDOW_NORMAL)
                 cv2.imshow("Result", result)
 
@@ -280,6 +284,8 @@ def detect_video(yolo, video_path=None, output_video=None):
 
 def detect_img(yolo, output=''):
     input_imgs = glob.glob(input_folder + '/*.jpg')
+    t_all = 0
+    num = 0
     for img in input_imgs:
         # img = input('Input image filename:')
         try:
@@ -289,9 +295,13 @@ def detect_img(yolo, output=''):
             print('Open Error! Try again!')
             continue
         else:
-            r_image = yolo.detect_image(image)
+            r_image, t2 = yolo.detect_image(image)
+            print("Inference time:", t2)
+            t_all += t2
+            num += 1
             r_image.save(img.replace(input_folder, output))
 
+    print(t_all/num)
     yolo.sess.close()
 
 

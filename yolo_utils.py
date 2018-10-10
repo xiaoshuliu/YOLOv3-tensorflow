@@ -115,7 +115,7 @@ def pre_process_data(annotation_path, data_path, input_shape, anchors, status, n
                                                 /home/minh/keras-yolo3/VOCdevkit/VOC2007/JPEGImages/000012.jpg 156,97,351,270,6
     """
     if status == "val":
-        max_data = 10
+        max_data = 2000
     else:
         max_data = 100000
     print ("Processing images ...")
@@ -126,7 +126,8 @@ def pre_process_data(annotation_path, data_path, input_shape, anchors, status, n
         print(len(GG))
         for line in (GG):
             count += 1
-            print ("Processing Image: ", count)
+            if count % 100 == 0:
+                print ("Processing Image: ", count)
             if count > max_data:
                 break
             line = line.split(' ')
@@ -160,6 +161,39 @@ def pre_process_data(annotation_path, data_path, input_shape, anchors, status, n
             np.savez(data_path + filename.split('/')[-1].split('.')[0] + '.npz', image_data=image_data, box_data=boxes, image_shape=image_shape, y_true0=y_true[0], y_true1=y_true[1], y_true2=y_true[2])
 
     return
+
+def online_process(line, input_shape, anchors, num_classes, max_boxes=100):
+    line = line.split(' ')
+    filename = line[0]
+    if filename[-1] == '\n':
+        filename = filename[:-1]
+    image = Image.open(filename)
+    boxed_image, shape_image = letterbox_image(image, tuple(reversed(input_shape)))
+
+    image_data = np.array(boxed_image, dtype=np.uint8)  # pixel: [0:255] uint8:[-128, 127]
+    image_shape = np.array(shape_image)
+    box_data = []
+    boxes = np.zeros((max_boxes, 5), dtype=np.int32)
+    # correct the BBs to the image resize
+    if len(line)==1:  # if there is no object in this image
+        box_data.append(boxes)
+    for i, box in enumerate(line[1:]):
+        if i < max_boxes:
+            boxes[i] = np.array(list(map(int, box.split(','))))
+        else:
+            break
+        image_size = np.array(image.size)
+        input_size = np.array(input_shape[::-1])
+        # for case 2
+        new_size = (image_size * np.min(input_size/image_size)).astype(np.int32)
+        # Correct BB to new image
+        boxes[i:i+1, 0:2] = (boxes[i:i+1, 0:2]*new_size/image_size + (input_size-new_size)/2).astype(np.int32)
+        boxes[i:i+1, 2:4] = (boxes[i:i+1, 2:4]*new_size/image_size + (input_size-new_size)/2).astype(np.int32)
+    box_data.append(boxes)
+    y_true = preprocess_true_boxes(np.array(box_data), input_shape[0], anchors, num_classes)
+    # np.savez(data_path + filename.split('/')[-1].split('.')[0] + '.npz', image_data=image_data, box_data=boxes, image_shape=image_shape, y_true0=y_true[0], y_true1=y_true[1], y_true2=y_true[2])
+
+    return image_data, y_true
 
 def load_training_data(data_path):
     """
