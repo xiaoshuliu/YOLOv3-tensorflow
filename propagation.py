@@ -23,7 +23,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 class YOLO(object):
     def __init__(self):
 
-        self.anchors_path = path + '/model/yolo_anchors.txt'
+        self.anchors_path = path + '/model/bdd_anchors.txt'
         self.COCO = False
         self.trainable = True
 

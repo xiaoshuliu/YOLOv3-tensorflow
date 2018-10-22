@@ -66,12 +66,13 @@ def compute_loss(yolo_outputs, y_true, anchors, num_classes, ignore_thresh=ignor
                                                                     from_logits=True) * ignore_mask
         class_loss = object_mask * K.binary_crossentropy(true_class_probs, raw_pred[..., 5:], from_logits=True)
 
-        loss_weight = 2**l
+        # loss_weight = 2**(2*l)
+        loss_weight = 1.0
         xy_loss = K.sum(xy_loss) / mf / loss_weight
         wh_loss = K.sum(wh_loss) / mf / loss_weight
         confidence_loss = K.sum(confidence_loss) / mf / loss_weight
         class_loss = K.sum(class_loss) / mf / loss_weight
-        loss += (xy_loss + 2*wh_loss + confidence_loss + class_loss)
+        loss += (xy_loss + wh_loss + confidence_loss + class_loss)
 
         if print_loss:
             loss = tf.Print(loss, [loss, xy_loss, wh_loss, confidence_loss, class_loss, K.sum(ignore_mask), K.shape(raw_true_wh)],

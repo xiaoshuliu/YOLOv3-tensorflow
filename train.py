@@ -30,7 +30,7 @@ PATH = path
 DATA_PATH = data_path
 classes_paths = PATH + '/model/bdd_classes.txt'
 classes_data = read_classes(classes_paths)
-anchors_paths = PATH + '/model/yolo_anchors.txt'
+anchors_paths = PATH + '/model/bdd_anchors.txt'
 anchors = read_anchors(anchors_paths)
 print ("Number of classes: ", len(classes_data))
 
@@ -52,21 +52,6 @@ with open(annotation_path_train) as f:
         label_train = f.readlines()
 with open(annotation_path_valid) as f:
         label_valid = f.readlines()
-
-# VOC = False
-# args = argument()
-# if args.VOC == True:
-#     VOC = True
-#     classes_paths = PATH + '/model/voc_classes.txt'
-#     classes_data = read_classes(classes_paths)
-#     annotation_path_train = PATH + '/model/voc_train.txt'
-#     annotation_path_valid = PATH + '/model/voc_val.txt'
-#     # annotation_path_test = PATH + '/model/voc_test.txt'
-
-#     data_path_train = PATH + '/model/voc_train.npz'
-#     data_path_valid = PATH + '/model/voc_valid.npz'
-#     # data_path_test = PATH + '/model/voc_test.npz'
-
 
 
 input_shape = (Input_shape, Input_shape)  # multiple of 32
@@ -113,13 +98,9 @@ with graph.as_default():
         # Calculate loss
         loss = compute_loss(scale_total, y_predict, anchors, len(classes_data), print_loss=False)
         tf.summary.scalar("Loss", loss)
+        
     with tf.name_scope("Optimizer"):
-        # optimizer
-        # learning_rate = tf.placeholder(tf.float32, shape=[1], name='lr')
-        # optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
-        optimizer = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(loss, global_step=global_step)
-        # optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=decay).minimize(loss)
-        # optimizer = tf.train.MomentumOptimizer(learning_rate, 0.01).minimize(loss)
+        optimizer = tf.train.AdamOptimizer(learning_rate=1e-4).minimize(loss, global_step=global_step)
 
     # STEP 3: Build the evaluation step ################################################################################
     # with tf.name_scope("Accuracy"):
@@ -146,29 +127,23 @@ with graph.as_default():
         summary_op = tf.summary.merge_all()
         # Summary Writers
         # tensorboard --logdir='./graphs/' --port 6005
-        # if VOC==True:
-            # train_summary_writer = tf.summary.FileWriter(PATH + '/graphs_VOC1/train', sess.graph)
-            # validation_summary_writer = tf.summary.FileWriter(PATH + '/graphs_VOC1/validation', sess.graph)
-        # else:
-            # train_summary_writer = tf.summary.FileWriter(PATH + '/graphs_boat10/train', sess.graph)
-            # validation_summary_writer = tf.summary.FileWriter(PATH + '/graphs_boat10/validation', sess.graph)
+        # train_summary_writer = tf.summary.FileWriter(PATH + '/graphs_boat10/train', sess.graph)
+        # validation_summary_writer = tf.summary.FileWriter(PATH + '/graphs_boat10/validation', sess.graph)
         # summary_writer = tf.summary.FileWriter('./graphs', sess.graph)
         sess.run(tf.global_variables_initializer())
         # If you want to continue training from check point
-        # checkpoint = "/home/minh/PycharmProjects/yolo3/save_model/SAVER_MODEL_boatM/model.ckpt-" + "1"
-        # saver.restore(sess, checkpoint)
+        checkpoint = "save_model/bdd10/epoch_new.ckpt-" + "4"
+        saver.restore(sess, checkpoint)
+
         epochs = 50  #
-        batch_size = 8  # consider
+        batch_size = 24  # consider
         best_loss_valid = 10e6
-        # train_list = glob.glob(data_path_train+"*.npz")
-        # valid_list = glob.glob(data_path_valid+"*.npz")
         number_image_train = len(label_train)
-        number_image_valid = 100
+        number_image_valid = len(label_valid)
         num_classes = len(classes_data)
         print(number_image_train, "images for training.")
         for epoch in range(epochs):
             start_time = time.time()
-            # nbr_iteration = epochs * round((12-0)/batch_size)
 
             ## Training#################################################################################################
             mean_loss_train = []
@@ -222,49 +197,50 @@ with graph.as_default():
             examples_per_sec = number_image_train / duration
             sec_per_batch = float(duration)
             # Validation ###############################################################################################
-            mean_loss_valid = []
-            for start in (range(0, number_image_valid, batch_size)):
-                end = start + batch_size
-                # Run summaries and measure accuracy on validation set
-                x_list = []
-                y1_list = []
-                y2_list = []
-                y3_list = []
-                for bb in range(batch_size):
-                    if start + bb == number_image_valid:
-                        break
-                    ind = start + bb
-                    # data_name = train_list[ind]
+            # mean_loss_valid = []
+            # for start in (range(0, number_image_valid, batch_size)):
+            #     end = start + batch_size
+            #     # Run summaries and measure accuracy on validation set
+            #     x_list = []
+            #     y1_list = []
+            #     y2_list = []
+            #     y3_list = []
+            #     for bb in range(batch_size):
+            #         if start + bb == number_image_valid:
+            #             break
+            #         ind = start + bb
+            #         # data_name = train_list[ind]
 
-                    label_line = label_valid[ind]
-                    x_, y_ = online_process(label_line, input_shape, anchors, num_classes)
-                    # x_, _, _, y_ = load_training_data(data_name)
-                    x_list.append(x_)
-                    y1_list.append(y_[0][0])
-                    y2_list.append(y_[1][0])
-                    y3_list.append(y_[2][0])
+            #         label_line = label_valid[ind]
+            #         x_, y_ = online_process(label_line, input_shape, anchors, num_classes)
+            #         # x_, _, _, y_ = load_training_data(data_name)
+            #         x_list.append(x_)
+            #         y1_list.append(y_[0][0])
+            #         y2_list.append(y_[1][0])
+            #         y3_list.append(y_[2][0])
 
-                x_valid = np.array(x_list)
-                y1_valid = np.array(y1_list)
-                y2_valid = np.array(y2_list)
-                y3_valid = np.array(y3_list)
+            #     x_valid = np.array(x_list)
+            #     y1_valid = np.array(y1_list)
+            #     y2_valid = np.array(y2_list)
+            #     y3_valid = np.array(y3_list)
 
-                summary_valid, loss_valid = sess.run([summary_op, loss],
-                                                    feed_dict={X: (x_valid/255.),
-                                                               Y1: y1_valid,
-                                                               Y2: y2_valid,
-                                                               Y3: y3_valid})  # ,options=run_options)
+            #     summary_valid, loss_valid = sess.run([summary_op, loss],
+            #                                         feed_dict={X: (x_valid/255.),
+            #                                                    Y1: y1_valid,
+            #                                                    Y2: y2_valid,
+            #                                                    Y3: y3_valid})  # ,options=run_options)
 
-                # validation_summary_writer.add_summary(summary_valid, epoch)
-                # Flushes the event file to disk
-                # validation_summary_writer.flush()
-                mean_loss_valid.append(loss_valid)
-            mean_loss_valid = np.mean(mean_loss_valid)
+            #     # validation_summary_writer.add_summary(summary_valid, epoch)
+            #     # Flushes the event file to disk
+            #     # validation_summary_writer.flush()
+            #     mean_loss_valid.append(loss_valid)
+            # mean_loss_valid = np.mean(mean_loss_valid)
 
-            print("epoch %s / %s \ttrain_loss: %s,\tvalid_loss: %s" %(epoch+1, epochs, mean_loss_train, mean_loss_valid))
+            # print("epoch %s / %s \ttrain_loss: %s,\tvalid_loss: %s" %(epoch+1, epochs, mean_loss_train, mean_loss_valid))
 
-            if best_loss_valid > mean_loss_valid:
-                best_loss_valid = mean_loss_valid
+            # if best_loss_valid > mean_loss_valid:
+            #     best_loss_valid = mean_loss_valid
+            if epoch % 5 == 0:
                 create_new_folder = PATH + "/save_model/bdd10"
                 try:
                     os.mkdir(create_new_folder)

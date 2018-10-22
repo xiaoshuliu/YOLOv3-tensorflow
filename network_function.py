@@ -139,12 +139,12 @@ class YOLOv3(object):
             ##########################################################
         with tf.name_scope('SCALE'):
             with tf.name_scope('scale_1'):
-                conv_53 = self.conv2d(resn_23, 53)
-                conv_54 = self.conv2d(conv_53, 54)
-                conv_55 = self.conv2d(conv_54, 55)  # [None,14,14,512]
-                conv_56 = self.conv2d(conv_55, 56)
-                conv_57 = self.conv2d(conv_56, 57)
-                conv_58 = self.conv2d(conv_57, 58)  # [None,13 ,13,1024]
+                conv_53 = self.conv2d(resn_23, 53, trainable=self.train)
+                conv_54 = self.conv2d(conv_53, 54, trainable=self.train)
+                conv_55 = self.conv2d(conv_54, 55, trainable=self.train)  # [None,14,14,512]
+                conv_56 = self.conv2d(conv_55, 56, trainable=self.train)
+                conv_57 = self.conv2d(conv_56, 57, trainable=self.train)
+                conv_58 = self.conv2d(conv_57, 58, trainable=self.train)  # [None,13 ,13,1024]
                 conv_59 = self.conv2d(conv_58, 59, batch_norm_and_activation=False, trainable=self.train)
                 # [yolo layer] 6,7,8 # 82  --->predict    scale:1, stride:32, detecting large objects => mask: 6,7,8
                 # 13x13x255, 255=3*(80+1+4)
@@ -153,12 +153,12 @@ class YOLOv3(object):
                 conv_60 = self.conv2d(route_1, 60)
                 upsam_1 = self.upsample(conv_60, 2, name="upsample_1")
                 route_2 = self.route2(upsam_1, resn_19, name="route_2")
-                conv_61 = self.conv2d(route_2, 61)
-                conv_62 = self.conv2d(conv_61, 62)
-                conv_63 = self.conv2d(conv_62, 63)
-                conv_64 = self.conv2d(conv_63, 64)
-                conv_65 = self.conv2d(conv_64, 65)
-                conv_66 = self.conv2d(conv_65, 66)
+                conv_61 = self.conv2d(route_2, 61, trainable=self.train)
+                conv_62 = self.conv2d(conv_61, 62, trainable=self.train)
+                conv_63 = self.conv2d(conv_62, 63, trainable=self.train)
+                conv_64 = self.conv2d(conv_63, 64, trainable=self.train)
+                conv_65 = self.conv2d(conv_64, 65, trainable=self.train)
+                conv_66 = self.conv2d(conv_65, 66, trainable=self.train)
                 conv_67 = self.conv2d(conv_66, 67, batch_norm_and_activation=False, trainable=self.train)
                 # [yolo layer] 3,4,5 # 94  --->predict   scale:2, stride:16, detecting medium objects => mask: 3,4,5
                 # 26x26x255, 255=3*(80+1+4)
@@ -167,12 +167,12 @@ class YOLOv3(object):
                 conv_68 = self.conv2d(route_3, 68)
                 upsam_2 = self.upsample(conv_68, 2, name="upsample_2")
                 route_4 = self.route2(upsam_2, resn_11, name="route_4")
-                conv_69 = self.conv2d(route_4, 69)
-                conv_70 = self.conv2d(conv_69, 70)
-                conv_71 = self.conv2d(conv_70, 71)
-                conv_72 = self.conv2d(conv_71, 72)
-                conv_73 = self.conv2d(conv_72, 73)
-                conv_74 = self.conv2d(conv_73, 74)
+                conv_69 = self.conv2d(route_4, 69, trainable=self.train)
+                conv_70 = self.conv2d(conv_69, 70, trainable=self.train)
+                conv_71 = self.conv2d(conv_70, 71, trainable=self.train)
+                conv_72 = self.conv2d(conv_71, 72, trainable=self.train)
+                conv_73 = self.conv2d(conv_72, 73, trainable=self.train)
+                conv_74 = self.conv2d(conv_73, 74, trainable=self.train)
                 conv_75 = self.conv2d(conv_74, 75, batch_norm_and_activation=False, trainable=self.train)
                 # [yolo layer] 0,1,2 # 106 --predict scale:3, stride:8, detecting the smaller objects => mask: 0,1,2
                 # 52x52x255, 255=3*(80+1+4)
@@ -238,18 +238,6 @@ class YOLOv3(object):
                 with tf.variable_scope('BatchNorm'):
                     variance_epsilon = tf.constant(0.0001, name="epsilon")  # small float number to avoid dividing by 0
 
-                    # batch_mean, batch_var = tf.nn.moments(inputs, [0, 1, 2], name='moments')
-                    # ema = tf.train.ExponentialMovingAverage(decay=0.5)
-                    #
-                    # def mean_var_with_update():
-                    #     ema_apply_op = ema.apply([batch_mean, batch_var])
-                    #     with tf.control_dependencies([ema_apply_op]):
-                    #         return tf.identity(batch_mean), tf.identity(batch_var)
-                    #
-                    # mean, var = tf.cond(self.is_training,
-                    #                     mean_var_with_update,
-                    #                     lambda: (ema.average(batch_mean), ema.average(batch_var)))
-
                     moving_mean, moving_variance, beta, gamma = B(idx)
                     moving_mean = tf.Variable(moving_mean, trainable=trainable, dtype=tf.float32, name="moving_mean")
                     # tf.summary.histogram(name_mean, moving_mean)  # add summary
@@ -270,14 +258,14 @@ class YOLOv3(object):
 
             else:
                 # for conv_59, conv67, conv_75
-                if trainable == True:
+                if trainable == True and (idx == 59 or idx == 67 or idx == 75):
                     # biases may be  init =0
                     biases = tf.Variable(
                         np.random.normal(size=[3 * (self.NUM_CLASSES + 1 + 4), ], loc=0.0, scale=0.01),
                         trainable=True,
                         dtype=np.float32, name="biases")
                 else:
-                    biases = tf.Variable(B(idx), trainable=False, dtype=tf.float32, name="biases")
+                    biases = tf.Variable(B(idx), trainable=trainable, dtype=tf.float32, name="biases")
                 # tf.summary.histogram(name_b, biases)  # add summary
                 conv = tf.add(conv, biases)
                 return conv
