@@ -27,14 +27,14 @@ def to_cla(category):
 def to_bbox(box):
 	return [box["x1"], box["y1"], box["x2"], box["y2"]]
 
-with open('../bdd100k/labels/bdd100k_labels_images_val.json') as f:
+with open('../bdd100k/labels/bdd100k_labels_images_train.json') as f:
     data = json.load(f)
 
 print len(data)
 
 bdd_train = open("bdd_train.txt",'w') 
 for label in data:
-	info = "/home/liu/Desktop/YOLOv3-tensorflow/bdd100k/images/100k/val/" + label['name'] + " "
+	info = "/home/liu/Desktop/YOLOv3-tensorflow/bdd100k/images/100k/train/" + label['name'] + " "
 	objs = []
 	for obj in label['labels']:
 		cla = to_cla(obj['category'])
@@ -43,7 +43,7 @@ for label in data:
 		bbox = to_bbox(obj['box2d'])
 		objs.append([cla, bbox])
 
-	if len(objs) <= 1:
+	if len(objs) < 1:
 		continue
 
 	for obj in objs:
