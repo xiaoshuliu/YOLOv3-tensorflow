@@ -31,7 +31,8 @@ class YOLOv3(object):
         Create the network graph
         :return: feature maps 5+80 in 3 grid (13,13), (26,26), (52, 52)
         """
-        print("YOLOv3, let's go!!!!!!!")
+        print("YOLOv3, GO!")
+        # Darknet 53
         with tf.name_scope("Features"):
             conv_1 = self.conv2d(self.X, 1)
             # Downsample#############################################
@@ -138,6 +139,7 @@ class YOLOv3(object):
             resn_23 = self.resnet(resn_22, conv_52, 23)  # [None, 13,13,1024]
             ##########################################################
         with tf.name_scope('SCALE'):
+            # scale1, h//32, w//32
             with tf.name_scope('scale_1'):
                 conv_53 = self.conv2d(resn_23, 53, trainable=self.train)
                 conv_54 = self.conv2d(conv_53, 54, trainable=self.train)
@@ -147,7 +149,7 @@ class YOLOv3(object):
                 conv_58 = self.conv2d(conv_57, 58, trainable=self.train)  # [None,13 ,13,1024]
                 conv_59 = self.conv2d(conv_58, 59, batch_norm_and_activation=False, trainable=self.train)
                 # [yolo layer] 6,7,8 # 82  --->predict    scale:1, stride:32, detecting large objects => mask: 6,7,8
-                # 13x13x255, 255=3*(80+1+4)
+            # scale2, h//16, w//16
             with tf.name_scope('scale_2'):
                 route_1 = self.route1(conv_57, name="route_1")
                 conv_60 = self.conv2d(route_1, 60)
@@ -161,7 +163,7 @@ class YOLOv3(object):
                 conv_66 = self.conv2d(conv_65, 66, trainable=self.train)
                 conv_67 = self.conv2d(conv_66, 67, batch_norm_and_activation=False, trainable=self.train)
                 # [yolo layer] 3,4,5 # 94  --->predict   scale:2, stride:16, detecting medium objects => mask: 3,4,5
-                # 26x26x255, 255=3*(80+1+4)
+            # scale3, h//8, w//8
             with tf.name_scope('scale_3'):
                 route_3 = self.route1(conv_65, name="route_3")
                 conv_68 = self.conv2d(route_3, 68)
@@ -175,9 +177,6 @@ class YOLOv3(object):
                 conv_74 = self.conv2d(conv_73, 74, trainable=self.train)
                 conv_75 = self.conv2d(conv_74, 75, batch_norm_and_activation=False, trainable=self.train)
                 # [yolo layer] 0,1,2 # 106 --predict scale:3, stride:8, detecting the smaller objects => mask: 0,1,2
-                # 52x52x255, 255=3*(80+1+4)
-                # Bounding Box:  YOLOv2: 13x13x5
-                #                YOLOv3: 13x13x3x3, 3 for each scale
 
         return conv_59, conv_67, conv_75
 
@@ -198,28 +197,24 @@ class YOLOv3(object):
         name_vari = 'moving_variance' + str(idx)
         name_beta = 'beta' + str(idx)
         name_gam = 'gamma' + str(idx)
-        # trainable = False
         with tf.variable_scope(name_conv):
             if trainable == True:
                 # we will initialize weights by a Gaussian distribution with mean 0 and variance 1/sqrt(n)
-                # don't set all = 0 or =
                 if idx == 59:
-                    # weights = tf.Variable(
-                    #     tf.random_normal(shape=[1, 1, 1024, 3 * (self.NUM_CLASSES + 1 + 4)], mean=0.0, stddev=0.01), trainable=True,
-                    #     dtype=tf.float32, name="weights")
                     weights = tf.Variable(
-                        np.random.normal(size=[1, 1, 1024, 3 * (self.NUM_CLASSES + 1 + 4)], loc=0.0, scale=0.01), trainable=True,
+                        np.random.normal(size=[1, 1, 1024, 3 * (self.NUM_CLASSES + 1 + 4 + 5)], loc=0.0, scale=0.01), trainable=True,
                         dtype=np.float32, name="weights")
                 elif idx == 67:
                     weights = tf.Variable(
-                        np.random.normal(size=[1, 1, 512, 3 * (self.NUM_CLASSES + 1 + 4)], loc=0.0, scale=0.01),
+                        np.random.normal(size=[1, 1, 512, 3 * (self.NUM_CLASSES + 1 + 4 + 5)], loc=0.0, scale=0.01),
                         trainable=True,
                         dtype=np.float32, name="weights")
                 elif idx == 75:
                     weights = tf.Variable(
-                        np.random.normal(size=[1, 1, 256, 3 * (self.NUM_CLASSES + 1 + 4)], loc=0.0, scale=0.01),
+                        np.random.normal(size=[1, 1, 256, 3 * (self.NUM_CLASSES + 1 + 4 + 5)], loc=0.0, scale=0.01),
                         trainable=True,
                         dtype=np.float32, name="weights")
+                # load weights from saved model
                 else:
                     weights = tf.Variable(W(idx), trainable=trainable, dtype=tf.float32, name="weights")
             else:
@@ -233,7 +228,7 @@ class YOLOv3(object):
             else:
                 conv = tf.nn.conv2d(inputs, weights, strides=[1, stride, stride, 1], padding='SAME', name="conv")
 
-            if batch_norm_and_activation:  # TODO
+            if batch_norm_and_activation:
                 # conv_1 ---> conv_75 EXCEPT conv_59, conv_67, conv_75
                 with tf.variable_scope('BatchNorm'):
                     variance_epsilon = tf.constant(0.0001, name="epsilon")  # small float number to avoid dividing by 0
@@ -249,8 +244,6 @@ class YOLOv3(object):
                     # tf.summary.histogram(name_gam, gamma)  # add summary
                     conv = tf.nn.batch_normalization(conv, moving_mean, moving_variance, beta, gamma,
                                                      variance_epsilon, name='BatchNorm')
-                    # conv = tf.nn.batch_normalization(conv, mean, var, beta, gamma,
-                    #                                  variance_epsilon, name='BatchNorm')
                 with tf.name_scope('Activation'):
                     alpha = tf.constant(0.1, name="alpha")  # Slope of the activation function at x < 0
                     acti = tf.maximum(alpha * conv, conv)
@@ -261,7 +254,7 @@ class YOLOv3(object):
                 if trainable == True and (idx == 59 or idx == 67 or idx == 75):
                     # biases may be  init =0
                     biases = tf.Variable(
-                        np.random.normal(size=[3 * (self.NUM_CLASSES + 1 + 4), ], loc=0.0, scale=0.01),
+                        np.random.normal(size=[3 * (self.NUM_CLASSES + 1 + 4 + 5), ], loc=0.0, scale=0.01),
                         trainable=True,
                         dtype=np.float32, name="biases")
                 else:

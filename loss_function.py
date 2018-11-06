@@ -1,5 +1,6 @@
 import keras.backend as K
 import tensorflow as tf
+import math
 from config import ignore_thresh
 
 from detect_function import yolo_head
@@ -8,17 +9,14 @@ from detect_function import yolo_head
 def compute_loss(yolo_outputs, y_true, anchors, num_classes, ignore_thresh=ignore_thresh, print_loss=False):
     """
         Return yolo_loss tensor
-    :param YOLO_outputs: list of 3 sortie of yolo_neural_network, ko phai cua predict (N, 13, 13, 3*14)
-    :param Y_true: list(3 array) [(N,13,13,3,85), (N,26,26,3,85), (N,52,52,3,14)]
+    :param YOLO_outputs: list of 3 sortie of yolo_neural_network
+    :param Y_true: list(3 array) [(N,h//32,w//32,3,10+numclass), (N,h//16,w//16,3,10+numclass), (N,h//8,w//8,3,10+numclass)]
     :param anchors: array, shape=(T, 2), wh
     :param num_classes: 80
     :param ignore_thresh:float, the iou threshold whether to ignore object confidence loss
     :return: loss
     """
-    # yolo_outputs = YOLO_outputs
-    # y_true = Y_true  # output of preprocess_true_boxes [3, None, 13, 13, 3, 2]
     anchor_mask = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
-
 
     input_shape = K.cast(K.shape(yolo_outputs[0])[1:3] * 32, K.dtype(y_true[0]))
     grid_shapes = [K.cast(K.shape(yolo_outputs[l])[1:3], K.dtype(y_true[0])) for l in range(3)]
@@ -28,16 +26,20 @@ def compute_loss(yolo_outputs, y_true, anchors, num_classes, ignore_thresh=ignor
 
     for l in range(3):
         object_mask = y_true[l][..., 4:5]
-        true_class_probs = y_true[l][..., 5:]
-
-        grid, raw_pred, pred_xy, pred_wh = yolo_head(yolo_outputs[l],
+        true_class_probs = y_true[l][..., 10:]
+        
+        # get YOLO output
+        grid, raw_pred, pred_xy, pred_wh, pred_cs, pred_hwl = yolo_head(yolo_outputs[l],
                                                      anchors[anchor_mask[l]], num_classes, input_shape, calc_loss=True)
         pred_box = K.concatenate([pred_xy, pred_wh])
 
         # Darknet raw box to calculate loss.
         raw_true_xy = y_true[l][..., :2] * grid_shapes[l][::-1] - grid
         raw_true_wh = K.log((y_true[l][..., 2:4] + 1e-9) / anchors[anchor_mask[l]] * input_shape[::-1])
-        # print(K.ndim(object_mask), K.ndim(raw_true_wh), K.ndim(K.zeros_like(raw_true_wh)))
+        # for 3D
+        raw_true_cs = y_true[l][..., 5:7]
+        raw_true_hwl = y_true[l][..., 7:10]
+
         # raw_true_wh = K.switch(object_mask, raw_true_wh, K.zeros_like(raw_true_wh))  # avoid log(0)=-inf
         extended_mask = tf.tile(object_mask, [1,1,1,1,2])
         raw_true_wh = tf.where(extended_mask > 0, raw_true_wh, K.ones_like(raw_true_wh))  # avoid log(0)=-inf
@@ -57,25 +59,44 @@ def compute_loss(yolo_outputs, y_true, anchors, num_classes, ignore_thresh=ignor
         ignore_mask = ignore_mask.stack()
         ignore_mask = K.expand_dims(ignore_mask, -1)
 
+        # set some weights for different losses
+        lambda_xy = 0.5
+        lambda_wh = 10.0
+        lambda_obj = 0.5
+        lambda_alpha = 6
+
         # K.binary_crossentropy is helpful to avoid exp overflow.
-        xy_loss = object_mask * box_loss_scale * K.binary_crossentropy(raw_true_xy, raw_pred[..., 0:2],
-                                                                       from_logits=True)
-        wh_loss = object_mask * box_loss_scale * 0.5 * K.square(raw_true_wh - raw_pred[..., 2:4])
+        # In YOLOv1, sum of square loss is used, you can easily replace it and remember to change the weight
+        xy_loss = lambda_xy * object_mask * box_loss_scale * K.binary_crossentropy(raw_true_xy, raw_pred[..., 0:2], from_logits=True)
+        # In YOLOv1, sum of square of sqrt loss is used, but sqrt has nan problem in backprop, need some trick if you really want to use it
+        wh_loss = lambda_wh * object_mask * box_loss_scale * K.square(raw_true_wh - raw_pred[..., 2:4])
+        # cs means cos,sin
+        # loss for alpha angle, simply use sum of square loss here, you can replace by the arccos loss
+        pred_cs = tf.nn.l2_normalize(pred_cs, axis=-1)
+        alpha_loss = lambda_alpha * object_mask * K.square(raw_true_cs - pred_cs)
+        # raw_true_cs = tf.nn.l2_normalize(raw_true_cs, axis=-1)
+        # cos_val = tf.multiply(pred_cs, raw_true_cs)
+        # cos_val = tf.clip_by_value(cos_val, -1, 1)
+        # alpha_loss = lambda_alpha * object_mask * (3.1415926/2 - (cos_val + K.pow(cos_val,3)/6 + K.pow(cos_val,5)*3/40 + K.pow(cos_val,7)*15/336))
+
+        hwl_loss = object_mask * K.square(raw_true_hwl - pred_hwl)
         confidence_loss = object_mask * K.binary_crossentropy(object_mask, raw_pred[..., 4:5], from_logits=True) + \
-                          (1 - object_mask) * K.binary_crossentropy(object_mask, raw_pred[..., 4:5],
+                          lambda_obj * (1 - object_mask) * K.binary_crossentropy(object_mask, raw_pred[..., 4:5],
                                                                     from_logits=True) * ignore_mask
-        class_loss = object_mask * K.binary_crossentropy(true_class_probs, raw_pred[..., 5:], from_logits=True)
+        class_loss = object_mask * K.binary_crossentropy(true_class_probs, raw_pred[..., 10:], from_logits=True)
+        
+        xy_loss = K.sum(xy_loss) / mf
+        wh_loss = K.sum(wh_loss) / mf
+        confidence_loss = K.sum(confidence_loss) / mf / 5
+        class_loss = K.sum(class_loss) / mf
+        alpha_loss = K.sum(alpha_loss) / mf
+        hwl_loss = K.sum(hwl_loss) / mf
 
-        # loss_weight = 2**(2*l)
-        loss_weight = 1.0
-        xy_loss = K.sum(xy_loss) / mf / loss_weight
-        wh_loss = K.sum(wh_loss) / mf / loss_weight
-        confidence_loss = K.sum(confidence_loss) / mf / loss_weight
-        class_loss = K.sum(class_loss) / mf / loss_weight
-        loss += (xy_loss + wh_loss + confidence_loss + class_loss)
+        loss += (xy_loss + wh_loss + confidence_loss + class_loss + alpha_loss + hwl_loss)
 
-        if print_loss:
-            loss = tf.Print(loss, [loss, xy_loss, wh_loss, confidence_loss, class_loss, K.sum(ignore_mask), K.shape(raw_true_wh)],
+        print_loss = True
+        if print_loss and l == 2:
+            loss = tf.Print(loss, [loss, xy_loss, wh_loss, confidence_loss, class_loss, alpha_loss, hwl_loss, K.sum(object_mask)],
                             message='loss: ')
     return loss
 

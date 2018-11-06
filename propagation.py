@@ -1,6 +1,6 @@
 # from argparse import ArgumentParser
 from PIL import Image, ImageFont, ImageDraw
-from config import Input_shape, channels, threshold, ignore_thresh, path
+from config import Input_width, Input_height, channels, threshold, ignore_thresh, path
 from network_function import YOLOv3
 from detect_function import predict
 from yolo_utils import read_anchors, read_classes, letterbox_image  # , resize_image
@@ -23,7 +23,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 class YOLO(object):
     def __init__(self):
 
-        self.anchors_path = path + '/model/bdd_anchors.txt'
+        
         self.COCO = False
         self.trainable = True
 
@@ -39,6 +39,11 @@ class YOLO(object):
         elif args1=='bdd':
             print("-----------bdd-----------")
             self.classes_path = path + '/model/bdd_classes.txt'
+            self.anchors_path = path + '/model/bdd_anchors.txt'
+        elif args1=='kitti':
+            print("-----------kitti-----------")
+            self.classes_path = path + '/model/kitti_classes.txt'
+            self.anchors_path = path + '/model/kitti_anchors.txt'
 
         # args = self.argument()
         # if args.COCO:
@@ -57,10 +62,11 @@ class YOLO(object):
         self.anchors = read_anchors(self.anchors_path)
         self.threshold = 0.5# threshold
         self.ignore_thresh = ignore_thresh
-        self.INPUT_SIZE = (Input_shape, Input_shape)  # fixed size or (None, None)
+        self.INPUT_SIZE = (Input_height, Input_width)  # fixed size or (None, None)
         self.is_fixed_size = self.INPUT_SIZE != (None, None)
         # LOADING SESSION...
-        self.boxes, self.scores, self.classes, self.sess = self.load()
+        # for 3D
+        self.boxes, self.scores, self.classes, self.alphas, self.hwls, self.sess = self.load()
 
     @staticmethod
     def argument():
@@ -83,7 +89,7 @@ class YOLO(object):
         random.seed(None)  # Reset seed to default.
 
         # Generate output tensor targets for filtered bounding boxes.
-        self.x = tf.placeholder(tf.float32, shape=[None, Input_shape, Input_shape, channels])
+        self.x = tf.placeholder(tf.float32, shape=[None, Input_height, Input_width, channels])
         self.image_shape = tf.placeholder(tf.float32, shape=[2,])
         # self.is_training = tf.placeholder(tf.bool)
         # image_shape = np.array([image.size[0], image.size[1]])  # tf.placeholder(tf.float32, shape=[2,])
@@ -94,7 +100,8 @@ class YOLO(object):
         scale_total = [scale1, scale2, scale3]
 
         # detect
-        boxes, scores, classes = predict(scale_total, self.anchors, len(self.class_names), self.image_shape,
+        # for 3D
+        boxes, scores, classes, alphas, hwls = predict(scale_total, self.anchors, len(self.class_names), self.image_shape,
                                          score_threshold=self.threshold, iou_threshold=self.ignore_thresh)
 
         # Add ops to save and restore all the variables
@@ -109,7 +116,7 @@ class YOLO(object):
         epoch = input('Entrer a check point at epoch:')
         # For the case of COCO
         epoch = epoch if self.COCO == False else 2000
-        checkpoint = path + "/save_model/bdd10/epoch_new" + ".ckpt-" + str(epoch)
+        checkpoint = path + "/save_model/kitti/kitti_l2loss" + ".ckpt-" + str(epoch)
         try:
             aaa = checkpoint + '.meta'
             my_abs_path = Path(aaa).resolve()
@@ -120,7 +127,7 @@ class YOLO(object):
             print("checkpoint: ", checkpoint)
             print("already training!")
 
-        return boxes, scores, classes, sess
+        return boxes, scores, classes, alphas, hwls, sess
 
     def detect_image(self, image):
         # Generate colors for drawing bounding boxes.
@@ -147,24 +154,29 @@ class YOLO(object):
         inputs = np.expand_dims(image_data, 0)  # Add batch dimension. #
 
         t1 = time.time()
-        out_boxes, out_scores, out_classes = self.sess.run([self.boxes, self.scores, self.classes],
+        # for 3D
+        out_boxes, out_scores, out_classes, out_alpha, out_hwl = self.sess.run([self.boxes, self.scores, self.classes, self.alphas, self.hwls],
                                                            feed_dict={self.x: inputs,
                                                                       self.image_shape: image_shape,
                                                                       # self.is_training: False
                                                                       })
 
+        print(out_alpha, out_hwl)
         print('Found {} boxes for {}'.format(len(out_boxes), 'img'))
         t2 = time.time() - t1
         print('Inference time:', t2)
 
         # Visualisation#################################################################################################
-        font = ImageFont.truetype(font=path + '/model/font/FiraMono-Medium.otf', size=np.floor(1e-2 * image.size[1] + 0.5).astype(np.int32))
-        thickness = (image.size[0] + image.size[1]) // 2000  # do day cua BB
-
+        font = ImageFont.truetype(font=path + '/model/font/FiraMono-Medium.otf', size=np.floor(1e-2 * image.size[0] + 0.5).astype(np.int32))
+        thickness = (image.size[0] + image.size[1]) // 500 
+        info = ""
         for i, c in reversed(list(enumerate(out_classes))):
             predicted_class = self.class_names[c]
             box = out_boxes[i]
             score = out_scores[i]
+            # for 3D
+            alpha = out_alpha[i]
+            hwl = out_hwl[i]
 
             label = '{} {:.2f}'.format(predicted_class, score)
             draw = ImageDraw.Draw(image)
@@ -188,7 +200,12 @@ class YOLO(object):
             draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=self.colors[c])
             draw.text(text_origin, label, fill=(0, 0, 0), font=font)
             del draw
-        return image, t2
+
+            alpha /= np.sqrt(alpha[0]**2 + alpha[1]**2)
+            alpha = np.arctan2(alpha[1], alpha[0])
+            info = info + predicted_class + " 0.00 0 " + str(alpha) + " " + str(left) + " " + str(top) + " " + str(right) + " " + str(bottom) + " "
+            info = info + str(hwl[0]) + " " + str(hwl[1]) + " " + str(hwl[2]) + " 0 0 0 0 1\n"
+        return image, t2, info
 
 def detect_video(yolo, video_path=None, output_video=None):
     import urllib.request as urllib
@@ -295,11 +312,16 @@ def detect_img(yolo, output=''):
             print('Open Error! Try again!')
             continue
         else:
-            r_image, t2 = yolo.detect_image(image)
+            image = image.crop((0, 475, 1919, 979))
+            r_image, t2, info = yolo.detect_image(image)
             print("Inference time:", t2)
             t_all += t2
             num += 1
             r_image.save(img.replace(input_folder, output))
+            file_name = output + "/" + img.split(".")[-2].split("/")[-1] + ".txt"
+            with open(file_name,'w') as f:
+                f.write(info)
+                f.close()
 
     print(t_all/num)
     yolo.sess.close()

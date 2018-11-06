@@ -11,14 +11,14 @@ import os
 import shutil
 import random 
 import math
-from config import path, Input_shape
+from config import path, Input_width, Input_height
 from PIL import Image
 
 
-width_in_cfg_file = Input_shape*1.0
-height_in_cfg_file = Input_shape*1.0
+width_in_cfg_file = Input_width*1.0
+height_in_cfg_file = Input_height*1.0
 
-annotation_path_train = path + '/model/bdd_train.txt'
+annotation_path_train = path + '/model/kitti_train.txt'
 
 def IOU(x,centroids):
     similarities = []
@@ -124,7 +124,7 @@ def main(argv):
             if len(line)==1:
                 continue
             for i, box in enumerate(line[1:]):
-                box = list(map(int, box.split(',')))
+                box = list(map(float, box.split(',')))
                 X.append([(box[2] - box[0])*1.0/image_w, (box[3] - box[1])*1.0/image_h])
     X = np.array(X)
     eps = 0.005
